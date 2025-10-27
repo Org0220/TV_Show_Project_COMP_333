@@ -30,7 +30,9 @@ TV show data integration and analysis project combining NDJSON source data with 
 | 4 | **Amazon Prime Movies and TV Shows** | [https://www.kaggle.com/datasets/shivamb/amazon-prime-movies-and-tv-shows](https://www.kaggle.com/datasets/shivamb/amazon-prime-movies-and-tv-shows) | Titles on Amazon Prime | Similar schema as Netflix dataset |
 | 5 | **Hulu Movies and TV Shows** | [https://www.kaggle.com/datasets/shivamb/hulu-movies-and-tv-shows](https://www.kaggle.com/datasets/shivamb/hulu-movies-and-tv-shows) | Titles on Hulu | Similar schema as Netflix dataset |
 
-> Download the datasets and place them in `/data/raw`
+### ⚠️ Download the datasets and place them in `/data/raw`
+
+---
 
 ## Running the Integration
 
