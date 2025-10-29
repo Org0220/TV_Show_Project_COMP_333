@@ -24,7 +24,7 @@ TV show data integration and analysis project combining NDJSON source data with 
 
 | # | Dataset | Link | Main Focus | Key Columns |
 |---|----------|------|-------------|--------------|
-| 1 | **The 500MB TV Show Dataset** | [https://www.kaggle.com/datasets/iyadelwy/the-500mb-tv-show-dataset](https://www.kaggle.com/datasets/iyadelwy/the-500mb-tv-show-dataset) | Detailed metadata for global TV shows | `title`, `description`, `genres`, `language`, `country`, `rating`, `release_year`, `cast`, `production_company` |
+| 1 | **The 500MB TV Show Dataset** | [https://www.kaggle.com/datasets/iyadelwy/the-500mb-tv-show-dataset](https://www.kaggle.com/datasets/iyadelwy/the-500mb-tv-show-dataset) | Detailed metadata for global TV shows | `id`,`title`, `description`, `genres`, `language`, `country`, `rating`, `release_year`, `cast`, `production_company` |
 | 2 | **Netflix Shows** | [https://www.kaggle.com/datasets/shivamb/netflix-shows](https://www.kaggle.com/datasets/shivamb/netflix-shows) | Titles on Netflix | `show_id`, `title`, `type`, `director`, `cast`, `country`, `date_added`, `release_year`, `rating`, `duration`, `listed_in`, `description` |
 | 3 | **Disney+ Movies and TV Shows** | [https://www.kaggle.com/datasets/shivamb/disney-movies-and-tv-shows](https://www.kaggle.com/datasets/shivamb/disney-movies-and-tv-shows) | Titles on Disney+ | Similar schema as Netflix dataset |
 | 4 | **Amazon Prime Movies and TV Shows** | [https://www.kaggle.com/datasets/shivamb/amazon-prime-movies-and-tv-shows](https://www.kaggle.com/datasets/shivamb/amazon-prime-movies-and-tv-shows) | Titles on Amazon Prime | Similar schema as Netflix dataset |
