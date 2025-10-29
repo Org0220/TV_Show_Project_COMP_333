@@ -55,10 +55,11 @@ python scripts/reset_db.py            # Reset database for testing
 
 ## Integration Method
 
-**Exact Matching**: (Title, Release Year) composite key
+**Exact Matching**: (Title, Release Year)
 - Normalizes titles: lowercase, remove country codes, normalize whitespace
 - Matches against Netflix, Disney+, Amazon, Hulu datasets
 - Platform availability stored as binary flags (1=available, 0=not)
+- Adds Primary Key id 
 
 ## Key Statistics
 
@@ -71,7 +72,7 @@ python scripts/reset_db.py            # Reset database for testing
 
 | Column | Type | Description |
 |--------|------|-------------|
-| id | INBTEGER | Primary key |
+| id | INTEGER | Primary key |
 | title | TEXT | Show title |
 | genres | JSON | Genre array |
 | description | TEXT | Show description |
