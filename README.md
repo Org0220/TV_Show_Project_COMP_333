@@ -88,6 +88,35 @@ python scripts/reset_db.py            # Reset database for testing
 ## Documentation
 
 - `C_Data_Integration.md` - Integration process, examples, and functional dependency analysis
+- `C_Data_Preparation.md` - Data preparation steps, null handling, duplicate removal, outlier detection, and examples
+
+## Data Preparation
+
+After integration, a dedicated data-preparation step standardises fields, handles missing values, removes duplicates, and flags outliers. The implementation is provided in `scripts/data_preparation_final.py` and is intended to be run after `integration_final.py`.
+
+What the script does
+- Loads: `data/processed/integrated_tv_shows.csv` (integration output)
+- Produces:
+   - `data/processed/cleaned_tv_shows.csv` (deduplicated, transformed)
+   - `data/processed/data_preparation_report.txt` (plain-text report with null counts, examples, duplicate, and outlier stats)
+- Key actions:
+   - Normalize titles into `title_normalized` (lowercase, remove common country codes, normalize whitespace)
+   - Parse and extract numeric `rating_avg` from `rating` metadata
+   - Parse `genres` into `genres_parsed` (list)
+   - Coerce `release_year` to nullable integer and parse `premiere_date` to datetime
+   - Impute `runtime_minutes` nulls with the column median (robust choice)
+   - Fill missing `language` with `Unknown`
+   - Detect and remove duplicates by composite key (`title_normalized` + `release_year`) keeping the first occurrence
+   - Flag outliers (IQR rule) on numeric fields (`runtime_minutes`, `rating_avg`) and report examples; no automatic capping/removal is performed by default
+
+Quick run
+```bash
+python scripts/data_preparation_final.py
+```
+
+Notes / rationale
+- The script is intentionally conservative: ratings (`rating_avg`) are extracted but left NaN where missing to avoid bias; outliers are flagged rather than removed to enable domain review.
+- The report written to `data/processed/data_preparation_report.txt` contains exact counts and short examples you can paste into your final report.
 
 ## Project Structure
 
