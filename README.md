@@ -71,6 +71,7 @@ python scripts/reset_db.py            # Reset database for testing
 
 | Column | Type | Description |
 |--------|------|-------------|
+| id | INBTEGER | Primary key |
 | title | TEXT | Show title |
 | genres | JSON | Genre array |
 | description | TEXT | Show description |
