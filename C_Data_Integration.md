@@ -106,7 +106,7 @@ Integration:
 ### Key Findings
 
 #### 1. Candidate Key
-**(Title, Release Year)** is a **candidate key** - uniquely identifies a show across the integrated dataset.
+**(Title, Release Year)** could potentially be a **candidate key** - it may uniquely identify a show across the integrated dataset.
 
 **Examples of duplicate titles with different years:**
 - "Alone": [2015, 2023]
