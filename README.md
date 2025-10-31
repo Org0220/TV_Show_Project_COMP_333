@@ -133,3 +133,22 @@ Notes / rationale
 │   └── reset_db.py                # Database utilities
 └── C_Data_Integration.md          # Integration documentation
 ```
+##  Tools Planned for the Project
+
+This project combines multiple open datasets on TV shows and streaming platforms. To support data collection, integration, transformation, and analysis, we use the following tools and systems:
+
+| Category | Tool | Purpose |
+|-----------|----------------|----------|
+| **Development Environment** | **VS Code**, **Google Colab** | Used for development, prototyping, and collaborative testing. |
+| **Programming Language** | **Python 3.12** | Main language for data ingestion, integration, transformation, and analysis. |
+| **Database System** | **PostgreSQL 17** | Stores the integrated TV show data and supports SQL queries and ETL operations through SQLAlchemy. |
+| **Data Integration & ETL Libraries** | **pandas**, **numpy**, **sqlalchemy**, **psycopg2** | Handle merging, cleaning, and loading of datasets into the PostgreSQL database. |
+| **Data Cleaning & Preparation** | **pandas**, **feature-engine**, **scikit-learn** | Manage missing values, normalization, and transformation of numeric and categorical features. |
+| **Data Visualization** | **Matplotlib**, **Seaborn**, **Power BI (optional)** | Used for exploratory data analysis and to create visual summaries of platform coverage and trends. |
+| **Modeling / Evaluation (Phase 2)** | **scikit-learn** | Builds and evaluates classification models (e.g., genre or rating prediction) using metrics such as accuracy and F1-score. |
+| **Version Control** | **Git + GitHub** | For source control, documentation, and team collaboration. |
+
+**Why choose these tools?:**  
+These tools ensure an efficient and reproducible workflow for ETL, data quality management, and machine learning. PostgreSQL provides structured data storage, while Python libraries like pandas and scikit-learn allow for flexible data manipulation and model experimentation. Visualization tools help us better understand platform availability, ratings, and genre distributions.
+
+```
