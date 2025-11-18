@@ -41,22 +41,11 @@ This allows models to learn seasonality or temporal patterns in genre distributi
 
 ### 2.2 Numeric Feature Scaling  
 
-Three forms of scaling are applied to the following numeric columns:
-- `runtime_minutes`
-- `rating_avg`
-- `release_year`
+The project applies three different normalization methods, each used strategically on a different numeric column.
 
-The script generates **three scaled versions** of each:
-
-| Scaling Method | Formula | Purpose |
-|----------------|---------|---------|
-| Min-Max Scaling | (x - min) / (max - min) | Normalizes to [0,1] |
-| Z-Score Normalization | (x - mean) / std | Standardized feature distribution |
-| Decimal Scaling | x / (10^j) | Moves decimal until max(|x|) < 1 |
-
-The project uses **Z-score scaled columns** for modeling, but retains all three in the CSV for transparency.
-
----
+  - runtime_minutes --> runtime_minutes_zscore (uses z-score normalization)
+  - rating_avg --> rating_avg_minmax01 (uses min-max scaling)
+  - release_year --> release_year_descale (using decimal scaling)
 
 ### 2.3 Feature Selection for Genre Prediction
 

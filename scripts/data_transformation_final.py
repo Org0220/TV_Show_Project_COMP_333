@@ -8,6 +8,7 @@ This script loads the CLEANED dataset created by data preparation
    - Min–max scaling to [0, 1]
    - Z-score normalization
    - Decimal scaling
+   (Applied differently per feature.)
 
 2. Date encoding:
    - Extract year, month, day-of-week, weekend flag, and decade
@@ -47,6 +48,7 @@ REPORT_TXT = ROOT / "data" / "processed" / "data_transformation_report.txt"
 # Import DB config
 sys.path.insert(0, str(ROOT))
 from config.db_config import SQLALCHEMY_URL  # type: ignore
+
 
 # ---------------------------------------------------
 # Scaling functions
@@ -111,6 +113,7 @@ def decimal_scale(series: pd.Series):
         "j": j,
         "max_abs_scaled": float(scaled.abs().max(skipna=True)),
     }
+
 
 # ---------------------------------------------------
 # Save to DB
@@ -190,21 +193,38 @@ def main():
         df["premiere_decade"] = (df["premiere_year"] // 10) * 10
 
         report_lines.append(
-            "Created: premiere_year, premiere_month, premiere_dayofweek, premiere_is_weekend, premiere_decade"
+            "Created: premiere_year, premiere_month, premiere_dayofweek, "
+            "premiere_is_weekend, premiere_decade"
         )
 
     report_lines.append("")
 
     # -------------------------------------------------------------
-    # SCALING
+    # SCALING (different method per feature)
     # -------------------------------------------------------------
-    numeric_candidates = ["runtime_minutes", "rating_avg", "release_year"]
-    numeric_candidates = [c for c in numeric_candidates if c in df.columns]
+    report_lines.append("DATA NORMALIZATION / SCALING")
+    report_lines.append("-" * 80)
 
-    for col in numeric_candidates:
-        df[f"{col}_minmax_01"], _ = min_max_scale(df[col])
-        df[f"{col}_zscore"], _ = z_score_scale(df[col])
-        df[f"{col}_decscale"], _ = decimal_scale(df[col])
+    # runtime_minutes -> Z-score
+    if "runtime_minutes" in df.columns:
+        df["runtime_minutes_zscore"], stats_rt = z_score_scale(df["runtime_minutes"])
+        report_lines.append("Applied Z-score scaling to 'runtime_minutes' -> 'runtime_minutes_zscore'")
+        for k, v in stats_rt.items():
+            report_lines.append(f"  runtime_minutes_zscore {k}: {v}")
+
+    # rating_avg -> Min–max [0, 1]
+    if "rating_avg" in df.columns:
+        df["rating_avg_minmax_01"], stats_ra = min_max_scale(df["rating_avg"])
+        report_lines.append("Applied Min–max [0,1] scaling to 'rating_avg' -> 'rating_avg_minmax_01'")
+        for k, v in stats_ra.items():
+            report_lines.append(f"  rating_avg_minmax_01 {k}: {v}")
+
+    # release_year -> Decimal scaling
+    if "release_year" in df.columns:
+        df["release_year_decscale"], stats_ry = decimal_scale(df["release_year"])
+        report_lines.append("Applied Decimal scaling to 'release_year' -> 'release_year_decscale'")
+        for k, v in stats_ry.items():
+            report_lines.append(f"  release_year_decscale {k}: {v}")
 
     # -------------------------------------------------------------
     # FEATURE SELECTION FOR GENRE PREDICTION
@@ -212,21 +232,22 @@ def main():
     report_lines.append("\nFEATURE SELECTION FOR GENRE PREDICTION")
     report_lines.append("-" * 80)
 
+    # Note: each numeric feature uses a different scaling method
     desired_columns = [
         "id",
         "title_normalized",
         "language",
         "type",
         "status",
-        "runtime_minutes_zscore",
-        "rating_avg_zscore",
-        "release_year_zscore",
+        "runtime_minutes_zscore",   # Z-score
+        "rating_avg_minmax_01",     # Min–max
+        "release_year_decscale",    # Decimal scaling
         "premiere_year",
         "premiere_month",
         "premiere_dayofweek",
         "premiere_is_weekend",
         "premiere_decade",
-        "genres_parsed",  # LABEL
+        "genres_parsed",            # LABEL
     ]
 
     keep = [c for c in desired_columns if c in df.columns]
@@ -234,12 +255,12 @@ def main():
 
     df = df[keep]
 
-    report_lines.append("Columns kept:")
+    report_lines.append("Columns kept (for modeling + label):")
     for c in keep:
         report_lines.append(f"  - {c}")
 
     report_lines.append("")
-    report_lines.append(f"Dropped {len(dropped)} irrelevant columns.")
+    report_lines.append(f"Dropped {len(dropped)} columns as redundant/irrelevant after feature selection.")
 
     # -------------------------------------------------------------
     # SAVE TO DB

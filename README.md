@@ -157,11 +157,10 @@ Outputs:
   - premiere_dayofweek
   - premiere_is_weekend
   - premiere_decade
-- Creates scaled numeric versions of:
-  - runtime_minutes
-  - rating_avg
-  - release_year
-- Supports min-max scaling, z-score normalization, and decimal scaling
+- Creates scaled numeric versions of (uses multiple scaling methods):
+  - runtime_minutes --> runtime_minutes_zscore
+  - rating_avg --> rating_avg_minmax01
+  - release_year --> release_year_descale
 - Drops raw columns (title, rating, genres)
 - Keeps cleaned versions (title_normalized, rating_avg, genres_parsed)
 - Performs feature selection for genre prediction
@@ -176,8 +175,8 @@ Outputs:
 | type | TEXT | Show type |
 | status | TEXT | Show status |
 | runtime_minutes_zscore | FLOAT | Z-score scaled runtime |
-| rating_avg_zscore | FLOAT | Z-score scaled rating |
-| release_year_zscore | FLOAT | Z-score scaled release year |
+| rating_avg_minmax_01 | FLOAT | Min–max scaled rating |
+| release_year_decscale | FLOAT | Decimal-scaled release year |
 | premiere_year | INTEGER | Encoded premiere year |
 | premiere_month | INTEGER | Encoded premiere month |
 | premiere_dayofweek | INTEGER | Encoded day of week |

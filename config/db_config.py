@@ -4,11 +4,11 @@ PostgreSQL Database Configuration
 
 # PostgreSQL Connection Configuration
 DATABASE_CONFIG = {
-    'host': 'localhost',
-    'port': 5432,
+    'host': '127.0.0.1',
+    'port': 5433,
     'database': 'tv_show_db',
     'user': 'postgres',
-    'password': 'admin',  # Change this to your PostgreSQL password
+    'password': 'postgres',  # Change this to your PostgreSQL password
 }
 
 # SQLAlchemy Connection String
