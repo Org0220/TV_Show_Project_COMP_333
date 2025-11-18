@@ -9,6 +9,8 @@ writes two artifacts:
 
 - `data/processed/cleaned_tv_shows.csv`  (cleaned dataset)
 - `data/processed/data_preparation_report.txt`  (plain-text report of actions)
+- PostgreSQL table: `integrated_tv_shows_cleaned`
+
 
 Overview of the main processing performed
 ----------------------------------------

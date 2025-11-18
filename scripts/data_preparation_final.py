@@ -11,6 +11,7 @@ and examples of transformations.
 Outputs:
 - data/processed/cleaned_tv_shows.csv
 - data/processed/data_preparation_report.txt
+- PostgreSQL table: integrated_tv_shows_cleaned
 
 Run:
     python scripts/data_preparation_final.py
@@ -23,11 +24,19 @@ from datetime import datetime
 import pandas as pd
 import numpy as np
 import re
+import sys
+
+from sqlalchemy import create_engine, text
+from sqlalchemy.exc import SQLAlchemyError
 
 ROOT = Path(__file__).resolve().parent.parent
 INPUT_CSV = ROOT / 'data' / 'processed' / 'integrated_tv_shows.csv'
 OUTPUT_CSV = ROOT / 'data' / 'processed' / 'cleaned_tv_shows.csv'
 REPORT_TXT = ROOT / 'data' / 'processed' / 'data_preparation_report.txt'
+
+# Make config importable (same pattern as integration script)
+sys.path.insert(0, str(ROOT))
+from config.db_config import SQLALCHEMY_URL  # type: ignore
 
 
 def normalize_title(title: str) -> str:
@@ -86,8 +95,45 @@ def iqr_outliers(series: pd.Series, k=1.5):
     return (series < lower) | (series > upper)
 
 
+def save_to_database(df: pd.DataFrame, report_lines: list[str]) -> None:
+    """Save cleaned data to PostgreSQL as integrated_tv_shows_cleaned."""
+    table_name = "integrated_tv_shows_cleaned"
+    report_lines.append("\nDATABASE SAVE:")
+    try:
+        engine = create_engine(SQLALCHEMY_URL)
+
+        # Write table (replace if exists)
+        with engine.begin() as conn:
+            df.to_sql(
+                table_name,
+                conn,
+                if_exists="replace",
+                index=False,
+                chunksize=500,
+                method="multi",
+            )
+
+            # If id exists, enforce PK on id (same idea as integration script, but simpler)
+            if "id" in df.columns:
+                conn.execute(text(f"ALTER TABLE {table_name} ALTER COLUMN id SET NOT NULL;"))
+                conn.execute(text(f"ALTER TABLE {table_name} DROP CONSTRAINT IF EXISTS {table_name}_pkey;"))
+                conn.execute(text(f"ALTER TABLE {table_name} ADD PRIMARY KEY (id);"))
+
+        # Verify row count
+        with engine.connect() as conn:
+            count = conn.execute(text(f"SELECT COUNT(*) FROM {table_name}")).scalar()
+
+        report_lines.append(f"  - Saved cleaned dataset to PostgreSQL table '{table_name}'.")
+        report_lines.append(f"  - Row count in database: {count:,}")
+
+    except SQLAlchemyError as e:
+        report_lines.append(f"  - ERROR saving to database: {e}")
+    except Exception as e:
+        report_lines.append(f"  - Unexpected error during database save: {e}")
+
+
 def main():
-    report_lines = []
+    report_lines: list[str] = []
     report_lines.append(f"Data preparation run: {datetime.now().isoformat()}\n")
 
     if not INPUT_CSV.exists():
@@ -116,7 +162,9 @@ def main():
         for col, rows in examples:
             report_lines.append(f"\nColumn: {col} -> {len(rows)} example(s):")
             for _, r in rows.iterrows():
-                report_lines.append(f"  - title={r.get('title')!r}, release_year={r.get('release_year')!r}, {col}={r.get(col)!r}")
+                report_lines.append(
+                    f"  - title={r.get('title')!r}, release_year={r.get('release_year')!r}, {col}={r.get(col)!r}"
+                )
 
     # --- Transformations ---
     report_lines.append('\nTRANSFORMATIONS APPLIED:')
@@ -169,20 +217,26 @@ def main():
         df['runtime_minutes'] = pd.to_numeric(df['runtime_minutes'], errors='coerce')
         df['runtime_minutes'] = df['runtime_minutes'].fillna(runtime_median)
         after_nulls = df['runtime_minutes'].isna().sum()
-        report_lines.append(f"  - Imputed 'runtime_minutes' nulls: before={before_nulls}, after={after_nulls}, filled with median={runtime_median}")
+        report_lines.append(
+            f"  - Imputed 'runtime_minutes' nulls: before={before_nulls}, after={after_nulls}, "
+            f"filled with median={runtime_median}"
+        )
 
     #  - rating_avg: leave as NaN but report; optionally fill with global median
     rating_median = df['rating_avg'].median()
     rating_nulls_before = df['rating_avg'].isna().sum()
-    # We will not overwrite rating NaNs by default; record strategy
-    report_lines.append(f"  - 'rating_avg' nulls: {rating_nulls_before:,} (median={rating_median}) -- retained NaN (no aggressive imputation)")
+    report_lines.append(
+        f"  - 'rating_avg' nulls: {rating_nulls_before:,} (median={rating_median}) -- retained NaN (no aggressive imputation)"
+    )
 
     #  - language: fill with 'Unknown'
     if 'language' in df.columns:
         lang_nulls_before = df['language'].isna().sum()
         df['language'] = df['language'].fillna('Unknown')
         lang_nulls_after = df['language'].isna().sum()
-        report_lines.append(f"  - Filled 'language' nulls: before={lang_nulls_before}, after={lang_nulls_after}, filled with 'Unknown'")
+        report_lines.append(
+            f"  - Filled 'language' nulls: before={lang_nulls_before}, after={lang_nulls_after}, filled with 'Unknown'"
+        )
 
     # --- Duplicate detection and removal ---
     report_lines.append('\nDUPLICATE DETECTION (title_normalized + release_year):')
@@ -203,7 +257,9 @@ def main():
         for key, g in dup_examples:
             report_lines.append(f"    * key={key} -> {len(g)} rows")
             for _, r in g.head(3).iterrows():
-                report_lines.append(f"      - title={r['title']!r}, release_year={r['release_year']!r}, premiere_date={r['premiere_date']!r}")
+                report_lines.append(
+                    f"      - title={r['title']!r}, release_year={r['release_year']!r}, premiere_date={r['premiere_date']!r}"
+                )
 
     # Remove duplicates keeping the first occurrence
     before = len(df)
@@ -217,33 +273,40 @@ def main():
 
     # --- Outlier detection ---
     report_lines.append('\nOUTLIER DETECTION (IQR method):')
-    outlier_details = {}
     # runtime_minutes
     if 'runtime_minutes' in df.columns:
         mask_rt = iqr_outliers(df['runtime_minutes'])
         n_rt = mask_rt.sum()
-        outlier_details['runtime_minutes'] = n_rt
         report_lines.append(f"  - runtime_minutes outliers: {n_rt}")
         if n_rt > 0:
             report_lines.append("    Examples:")
             for _, r in df[mask_rt].head(5).iterrows():
-                report_lines.append(f"      - title={r['title']!r}, release_year={r['release_year']!r}, runtime_minutes={r['runtime_minutes']}")
+                report_lines.append(
+                    f"      - title={r['title']!r}, release_year={r['release_year']!r}, "
+                    f"runtime_minutes={r['runtime_minutes']}"
+                )
 
     # rating_avg
     if 'rating_avg' in df.columns:
         mask_rtg = iqr_outliers(df['rating_avg'])
         n_rtg = mask_rtg.sum()
-        outlier_details['rating_avg'] = n_rtg
         report_lines.append(f"  - rating_avg outliers: {n_rtg}")
         if n_rtg > 0:
             report_lines.append("    Examples:")
             for _, r in df[mask_rtg].head(5).iterrows():
-                report_lines.append(f"      - title={r['title']!r}, release_year={r['release_year']!r}, rating_avg={r['rating_avg']}")
+                report_lines.append(
+                    f"      - title={r['title']!r}, release_year={r['release_year']!r}, rating_avg={r['rating_avg']}"
+                )
 
-    # Optionally, we could cap outliers — here we only flag and report them.
     report_lines.append("  - Strategy: outliers are flagged and reported; no automatic capping applied.")
 
+    # --- Save to database (new cleaned table) ---
+    save_to_database(df, report_lines)
+
     # --- Finalize and save outputs ---
+    # Ensure directory exists for CSV/report
+    OUTPUT_CSV.parent.mkdir(parents=True, exist_ok=True)
+
     df.to_csv(OUTPUT_CSV, index=False, encoding='utf-8')
     report_lines.append(f"\nWrote cleaned CSV: {OUTPUT_CSV} (rows: {len(df):,})")
 
