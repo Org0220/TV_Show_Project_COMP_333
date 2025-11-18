@@ -121,23 +121,27 @@ Notes / rationale
 
 ### Data Preparation Output Schema
 
-| Column | Type | Description |
-|--------|------|-------------|
-| id | INTEGER | Primary key |
-| title_normalized | TEXT | Standardized title for matching |
-| description | TEXT | Show summary |
-| premiere_date | DATETIME | Parsed premiere date |
-| release_year | INTEGER | Cleaned release year |
-| rating_avg | FLOAT | Extracted numeric rating |
-| language | TEXT | Cleaned language |
-| type | TEXT | Show type |
-| runtime_minutes | FLOAT | Runtime after imputation |
-| status | TEXT | Running / Ended |
-| genres_parsed | JSON LIST | Parsed list of genres |
-| on_netflix | INTEGER | 1/0 indicator |
-| on_disney | INTEGER | 1/0 indicator |
-| on_amazon | INTEGER | 1/0 indicator |
-| on_hulu | INTEGER | 1/0 indicator |
+| Column           | Type        | Description                                    |
+|------------------|-------------|------------------------------------------------|
+| id               | INTEGER     | Primary key                                    |
+| title            | TEXT        | Original show title                            |
+| title_normalized | TEXT        | Standardized lowercase title for matching      |
+| description      | TEXT        | Show summary / overview                        |
+| premiere_date    | DATETIME    | Parsed premiere date                           |
+| release_year     | INTEGER     | Cleaned release year (nullable Int64)          |
+| rating           | TEXT        | Raw rating field from API                      |
+| rating_avg       | FLOAT       | Extracted numeric rating                       |
+| language         | TEXT        | Cleaned language ('Unknown' if missing)        |
+| type             | TEXT        | Show type (e.g., Scripted, Animation)          |
+| runtime_minutes  | FLOAT       | Runtime after numeric conversion + imputation  |
+| status           | TEXT        | Running / Ended / In Production                |
+| genres           | TEXT        | Raw genre list as string                       |
+| genres_parsed    | JSON LIST   | Parsed list of genres                          |
+| on_netflix       | INTEGER     | 1/0 indicator                                  |
+| on_disney        | INTEGER     | 1/0 indicator                                  |
+| on_amazon        | INTEGER     | 1/0 indicator                                  |
+| on_hulu          | INTEGER     | 1/0 indicator                                  |
+
 
 # Data Transformation
 
