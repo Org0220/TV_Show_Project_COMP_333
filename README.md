@@ -89,6 +89,7 @@ python scripts/reset_db.py            # Reset database for testing
 
 - `C_Data_Integration.md` - Integration process, examples, and functional dependency analysis
 - `C_Data_Preparation.md` - Data preparation steps, null handling, duplicate removal, outlier detection, and examples
+- `F_Data_Transformation.md` - Data transformation steps: scaling, date encoding, and feature selection
 
 ## Data Preparation
 
@@ -118,6 +119,75 @@ Notes / rationale
 - The script is intentionally conservative: ratings (`rating_avg`) are extracted but left NaN where missing to avoid bias; outliers are flagged rather than removed to enable domain review.
 - The report written to `data/processed/data_preparation_report.txt` contains exact counts and short examples you can paste into your final report.
 
+### Data Preparation Output Schema
+
+| Column           | Type        | Description                                    |
+|------------------|-------------|------------------------------------------------|
+| id               | INTEGER     | Primary key                                    |
+| title            | TEXT        | Original show title                            |
+| title_normalized | TEXT        | Standardized lowercase title for matching      |
+| description      | TEXT        | Show summary / overview                        |
+| premiere_date    | DATETIME    | Parsed premiere date                           |
+| release_year     | INTEGER     | Cleaned release year (nullable Int64)          |
+| rating           | TEXT        | Raw rating field from API                      |
+| rating_avg       | FLOAT       | Extracted numeric rating                       |
+| language         | TEXT        | Cleaned language ('Unknown' if missing)        |
+| type             | TEXT        | Show type (e.g., Scripted, Animation)          |
+| runtime_minutes  | FLOAT       | Runtime after numeric conversion + imputation  |
+| status           | TEXT        | Running / Ended / In Production                |
+| genres           | TEXT        | Raw genre list as string                       |
+| genres_parsed    | JSON LIST   | Parsed list of genres                          |
+| on_netflix       | INTEGER     | 1/0 indicator                                  |
+| on_disney        | INTEGER     | 1/0 indicator                                  |
+| on_amazon        | INTEGER     | 1/0 indicator                                  |
+| on_hulu          | INTEGER     | 1/0 indicator                                  |
+
+
+# Data Transformation
+
+Run:
+
+    python scripts/data_transformation_final.py
+
+Outputs:
+- data/processed/transformed_tv_shows.csv
+- data/processed/data_transformation_report.txt
+- PostgreSQL table: integrated_tv_shows_transformed
+
+### What Data Transformation Does
+- Encodes premiere_date into numeric features:
+  - premiere_year
+  - premiere_month
+  - premiere_dayofweek
+  - premiere_is_weekend
+  - premiere_decade
+- Creates scaled numeric versions of (uses multiple scaling methods):
+  - runtime_minutes --> runtime_minutes_zscore
+  - rating_avg --> rating_avg_minmax01
+  - release_year --> release_year_descale
+- Drops raw columns (title, rating, genres)
+- Keeps cleaned versions (title_normalized, rating_avg, genres_parsed)
+- Performs feature selection for genre prediction
+
+### Data Transformation Output Schema (ML-ready)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | INTEGER | Primary key |
+| title_normalized | TEXT | Normalized title |
+| language | TEXT | Clean language |
+| type | TEXT | Show type |
+| status | TEXT | Show status |
+| runtime_minutes_zscore | FLOAT | Z-score scaled runtime |
+| rating_avg_minmax_01 | FLOAT | Min–max scaled rating |
+| release_year_decscale | FLOAT | Decimal-scaled release year |
+| premiere_year | INTEGER | Encoded premiere year |
+| premiere_month | INTEGER | Encoded premiere month |
+| premiere_dayofweek | INTEGER | Encoded day of week |
+| premiere_is_weekend | INTEGER | Weekend indicator |
+| premiere_decade | INTEGER | Decade grouping |
+| genres_parsed | JSON LIST | Label for genre prediction |
+
 ## Project Structure
 
 ```
@@ -128,10 +198,15 @@ Notes / rationale
 │   └── processed/                 # Output CSV and reports
 ├── scripts/
 │   ├── integration_final.py       # Main integration pipeline
+    ├── data_preperation_final.py  # Main preperation pipeline
+    ├── data_transformation_final.py  # Main transformation pipeline
 │   ├── diagnostic.py              # Database diagnostics
 │   ├── analyze_dependencies.py    # Dependency analysis
 │   └── reset_db.py                # Database utilities
-└── C_Data_Integration.md          # Integration documentation
+├── C_Data_Integration.md          # Integration documentation
+├── D_Data_Preperation.md          # Preperation documentation
+└── F_Data_Transformation.md       # Transformation documentation
+
 ```
 ##  Tools Planned for the Project
 

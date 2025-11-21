@@ -39,6 +39,11 @@ DATA_PATHS['hulu'] = str(PROJECT_ROOT / DATA_PATHS['hulu'])
 OUTPUT_PATHS['integrated_csv'] = str(PROJECT_ROOT / OUTPUT_PATHS['integrated_csv'])
 OUTPUT_PATHS['integration_report'] = str(PROJECT_ROOT / OUTPUT_PATHS['integration_report'])
 
+# --- Ensure output directory exists ---
+processed_dir = Path(OUTPUT_PATHS['integrated_csv']).parent
+processed_dir.mkdir(parents=True, exist_ok=True)
+
+
 
 class TVShowIntegrationHybrid:
     """Hybrid chunked loading integration pipeline"""
