@@ -188,6 +188,22 @@ Outputs:
 | premiere_decade | INTEGER | Decade grouping |
 | genres_parsed | JSON LIST | Label for genre prediction |
 
+# Modeling
+
+Run:
+
+    python scripts/modeling_final.py
+
+Outputs:
+- data/processed/modeling_report.txt
+- Console output with model performance metrics
+
+### What Modeling Does
+- Loads Raw and Transformed data.
+- Trains 3 models (Logistic Regression, Random Forest, Gradient Boosting) to predict if a show is a "Comedy".
+- Compares performance between models and datasets.
+
+
 ## Project Structure
 
 ```
@@ -200,12 +216,14 @@ Outputs:
 │   ├── integration_final.py       # Main integration pipeline
     ├── data_preperation_final.py  # Main preperation pipeline
     ├── data_transformation_final.py  # Main transformation pipeline
+    ├── modeling_final.py          # Main modeling pipeline
 │   ├── diagnostic.py              # Database diagnostics
 │   ├── analyze_dependencies.py    # Dependency analysis
 │   └── reset_db.py                # Database utilities
 ├── C_Data_Integration.md          # Integration documentation
 ├── D_Data_Preperation.md          # Preperation documentation
-└── F_Data_Transformation.md       # Transformation documentation
+├── F_Data_Transformation.md       # Transformation documentation
+└── G_Modeling.md                  # Modeling documentation
 
 ```
 ##  Tools Planned for the Project
