@@ -1,22 +1,38 @@
 import pandas as pd
-import numpy as np
 import ast
-import sys
+import warnings
+from time import time
+from pathlib import Path
+import joblib
+
 from sklearn.model_selection import train_test_split
+from sklearn.multioutput import MultiOutputClassifier
+
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, classification_report
+
+from sklearn.metrics import (
+    accuracy_score, precision_score, recall_score, f1_score
+)
+
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.impute import SimpleImputer
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.preprocessing import MultiLabelBinarizer
 
-# --- Configuration ---
-RAW_DATA_PATH = 'data/processed/integrated_tv_shows.csv'
+from tqdm.auto import tqdm
+
+warnings.filterwarnings("ignore")
+
+RAW_DATA_PATH = 'data/processed/cleaned_tv_shows.csv'
 TRANSFORMED_DATA_PATH = 'data/processed/transformed_tv_shows.csv'
-REPORT_PATH = 'data/processed/modeling_report.txt'
-TARGET_GENRE = 'Comedy'
+REPORT_PATH = 'data/processed/modeling_report_multilabel.txt'
+MODELS_DIR = Path('data/processed/models')
+
 RANDOM_STATE = 42
+
 
 def parse_genres(x):
     try:
@@ -24,153 +40,227 @@ def parse_genres(x):
     except:
         return []
 
-def load_and_prep_raw():
-    print("Loading Raw Data...")
-    df = pd.read_csv(RAW_DATA_PATH)
-    
-    # Target Extraction
-    df['genres_list'] = df['genres'].apply(parse_genres)
-    df['target'] = df['genres_list'].apply(lambda x: 1 if TARGET_GENRE in x else 0)
-    
-    # Feature Selection (Raw features that might be useful)
-    # We avoid text descriptions for this basic modeling, focusing on metadata
-    features = ['release_year', 'runtime_minutes', 'language', 'type', 'status']
-    
-    X = df[features]
-    y = df['target']
-    
-    # Preprocessing Pipeline for Raw Data
-    # - Numeric: Impute missing with median
-    # - Categorical: Impute missing with 'Unknown', then OneHotEncode
-    
-    numeric_features = ['release_year', 'runtime_minutes']
-    categorical_features = ['language', 'type', 'status']
-    
-    numeric_transformer = SimpleImputer(strategy='median')
-    
-    categorical_transformer = Pipeline(steps=[
-        ('imputer', SimpleImputer(strategy='constant', fill_value='Unknown')),
-        ('onehot', OneHotEncoder(handle_unknown='ignore'))
-    ])
-    
-    preprocessor = ColumnTransformer(
-        transformers=[
-            ('num', numeric_transformer, numeric_features),
-            ('cat', categorical_transformer, categorical_features)
+
+def slugify(value: str) -> str:
+    return ''.join(ch if ch.isalnum() else '_' for ch in value).strip('_').lower()
+
+
+def load_and_prep_dataset(csv_path: str, label: str):
+    print(f"Loading dataset ({label})...")
+
+    df = pd.read_csv(csv_path)
+
+    # Parse genres
+    genre_col = 'genres_parsed' if 'genres_parsed' in df.columns else 'genres'
+    df['genres_list'] = df[genre_col].apply(parse_genres)
+
+    # MULTI-LABEL TARGET BUILDING
+    mlb = MultiLabelBinarizer()
+    Y = mlb.fit_transform(df['genres_list'])
+    genre_classes = mlb.classes_
+
+    # Combine text features
+    title_bits = df['title'].fillna('')
+    if 'title_normalized' in df.columns:
+        title_bits = (title_bits + ' ' + df['title_normalized'].fillna('')).str.strip()
+
+    df['text_all'] = (title_bits + ' ' + df['description'].fillna('')).str.strip()
+
+    numeric_candidates = [
+        'rating_avg_minmax_01',
+        'runtime_minutes_zscore',
+        'release_year_decscale',
+        'premiere_month',
+        'premiere_dayofweek',
+        'premiere_year',
+        'premiere_decade',
+        'rating_avg',
+        'runtime_minutes',
+        'release_year',
+    ]
+    categorical_candidates = [
+        'language',
+        'type',
+        'status',
+        'on_netflix',
+        'on_disney',
+        'on_amazon',
+        'on_hulu',
+    ]
+
+    numeric_features = [c for c in numeric_candidates if c in df.columns]
+    categorical_features = [c for c in categorical_candidates if c in df.columns]
+    text_feature = 'text_all'
+
+    X = df[numeric_features + categorical_features + [text_feature]]
+
+    # ColumnTransformer
+    transformers = []
+
+    if numeric_features:
+        transformers.append(
+            ('num', SimpleImputer(strategy='median'), numeric_features)
+        )
+
+    if categorical_features:
+        cat_transformer = Pipeline(steps=[
+            ('imputer', SimpleImputer(strategy='constant', fill_value='Unknown')),
+            ('onehot', OneHotEncoder(handle_unknown='ignore'))
         ])
-        
-    return X, y, preprocessor
+        transformers.append(('cat', cat_transformer, categorical_features))
 
-def load_and_prep_transformed():
-    print("Loading Transformed Data...")
-    df = pd.read_csv(TRANSFORMED_DATA_PATH)
-    
-    # The transformed data might not have the 'target' column explicitly if it wasn't preserved.
-    # However, it usually has 'genres_parsed'. Let's check.
-    # If 'genres_parsed' is there, we use it. If not, we might need to join with raw.
-    # Based on previous steps, 'genres_parsed' should be there.
-    
-    if 'genres_parsed' in df.columns:
-        df['genres_list'] = df['genres_parsed'].apply(parse_genres)
-        df['target'] = df['genres_list'].apply(lambda x: 1 if TARGET_GENRE in x else 0)
-    else:
-        # Fallback: Join with raw on ID to get target
-        print("Warning: 'genres_parsed' not found in transformed data. Joining with raw data to get target.")
-        df_raw = pd.read_csv(RAW_DATA_PATH)[['id', 'genres']]
-        df = df.merge(df_raw, on='id', how='left')
-        df['genres_list'] = df['genres'].apply(parse_genres)
-        df['target'] = df['genres_list'].apply(lambda x: 1 if TARGET_GENRE in x else 0)
+    transformers.append(
+        ('txt', Pipeline([('tfidf', TfidfVectorizer(max_features=8000, stop_words='english'))]), text_feature)
+    )
 
-    # Features from transformed schema
-    # We use the scaled/encoded features
-    feature_cols = [c for c in df.columns if c not in ['id', 'title_normalized', 'genres_parsed', 'genres', 'genres_list', 'target', 'Unnamed: 0']]
-    
-    # Filter out any object columns that might have slipped through or need encoding
-    # Ideally transformed data is all numeric, but 'language', 'type', 'status' might be there as text if not fully encoded in transformation step.
-    # Let's check dtypes.
-    
-    X = df[feature_cols]
-    y = df['target']
-    
-    # Identify categorical vs numeric in X
-    # If transformation step already encoded everything, this will be all numeric.
-    # If not, we apply encoding.
-    
-    numeric_features = X.select_dtypes(include=['int64', 'float64']).columns.tolist()
-    categorical_features = X.select_dtypes(include=['object']).columns.tolist()
-    
-    numeric_transformer = SimpleImputer(strategy='median') # Just in case
-    
-    categorical_transformer = Pipeline(steps=[
-        ('imputer', SimpleImputer(strategy='constant', fill_value='Unknown')),
-        ('onehot', OneHotEncoder(handle_unknown='ignore'))
-    ])
-    
-    preprocessor = ColumnTransformer(
-        transformers=[
-            ('num', numeric_transformer, numeric_features),
-            ('cat', categorical_transformer, categorical_features)
-        ])
+    preprocessor = ColumnTransformer(transformers=transformers)
 
-    return X, y, preprocessor
-
-def train_and_evaluate(X, y, preprocessor, dataset_name, report_file):
-    print(f"\n--- Processing {dataset_name} Data ---")
-    
-    # Split
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=RANDOM_STATE, stratify=y)
-    
-    models = {
-        'Logistic Regression': LogisticRegression(max_iter=1000, random_state=RANDOM_STATE),
-        'Random Forest': RandomForestClassifier(n_estimators=100, random_state=RANDOM_STATE),
-        'Gradient Boosting': GradientBoostingClassifier(n_estimators=100, random_state=RANDOM_STATE)
+    feature_summary = {
+        "numeric": numeric_features,
+        "categorical": categorical_features,
+        "text": [text_feature]
     }
-    
-    report_file.write(f"\n{'='*20}\nDataset: {dataset_name}\n{'='*20}\n")
-    
-    results = {}
-    
-    for name, model in models.items():
-        print(f"Training {name}...")
-        
-        # Create full pipeline
-        clf = Pipeline(steps=[('preprocessor', preprocessor),
-                              ('classifier', model)])
-        
-        clf.fit(X_train, y_train)
-        y_pred = clf.predict(X_test)
-        
-        acc = accuracy_score(y_test, y_pred)
-        prec = precision_score(y_test, y_pred, zero_division=0)
-        rec = recall_score(y_test, y_pred, zero_division=0)
-        f1 = f1_score(y_test, y_pred, zero_division=0)
-        
-        results[name] = {'Accuracy': acc, 'Precision': prec, 'Recall': rec, 'F1': f1}
-        
-        report_file.write(f"\nModel: {name}\n")
-        report_file.write(f"Accuracy:  {acc:.4f}\n")
-        report_file.write(f"Precision: {prec:.4f}\n")
-        report_file.write(f"Recall:    {rec:.4f}\n")
-        report_file.write(f"F1 Score:  {f1:.4f}\n")
-        report_file.write("-" * 20 + "\n")
-        
-    return results
+
+    return X, Y, preprocessor, feature_summary, genre_classes
+
+
+def train_and_evaluate(X, Y, preprocessor, genre_classes):
+    print("\nTraining models (multi-label)...")
+
+    stratify_y = Y if getattr(Y, "ndim", 1) == 1 else None
+    if stratify_y is not None and getattr(stratify_y, "ndim", 1) > 1:
+        stratify_y = None
+
+    if stratify_y is None:
+        print("  -> Skipping stratification: multi-label target can't be stratified safely.")
+
+    X_train, X_test, Y_train, Y_test = train_test_split(
+        X, Y, test_size=0.2, random_state=RANDOM_STATE, stratify=stratify_y
+    )
+
+    base_models = {
+        'Logistic Regression': LogisticRegression(max_iter=5000, random_state=RANDOM_STATE),
+        'Random Forest': RandomForestClassifier(n_estimators=300, random_state=RANDOM_STATE),
+        'Gradient Boosting': GradientBoostingClassifier(n_estimators=300, random_state=RANDOM_STATE)
+    }
+
+    # Wrap into MultiOutputClassifier
+    models = {
+        name: MultiOutputClassifier(model)
+        for name, model in base_models.items()
+    }
+
+    results = []
+    best_f1 = -1
+    best_model = None
+    best_name = None
+
+    model_items = list(models.items())
+    durations = []
+
+    with tqdm(total=len(model_items), desc="Training models", unit="model") as pbar:
+        for idx, (name, model) in enumerate(model_items):
+
+            start_time = time()
+            pbar.set_description(f"Training {name}")
+
+            clf = Pipeline(steps=[
+                ('preprocessor', preprocessor),
+                ('classifier', model)
+            ])
+
+            clf.fit(X_train, Y_train)
+            Y_pred = clf.predict(X_test)
+
+            duration = time() - start_time
+            durations.append(duration)
+            eta = (len(model_items) - idx - 1) * (sum(durations) / len(durations))
+            pbar.set_postfix({"last_s": f"{duration:.1f}", "eta_s": f"{eta:.1f}"})
+            pbar.update(1)
+
+            # Multi-label metrics
+            acc = accuracy_score(Y_test, Y_pred)
+            prec = precision_score(Y_test, Y_pred, average='macro', zero_division=0)
+            rec = recall_score(Y_test, Y_pred, average='macro', zero_division=0)
+            f1 = f1_score(Y_test, Y_pred, average='macro', zero_division=0)
+
+            # Per-genre metrics
+            per_genre = {}
+            for i, genre in enumerate(genre_classes):
+                per_genre[genre] = {
+                    "prec": precision_score(Y_test[:, i], Y_pred[:, i], zero_division=0),
+                    "rec": recall_score(Y_test[:, i], Y_pred[:, i], zero_division=0),
+                    "f1": f1_score(Y_test[:, i], Y_pred[:, i], zero_division=0)
+                }
+
+            results.append({
+                "name": name,
+                "model": clf,
+                "macro_acc": acc,
+                "macro_prec": prec,
+                "macro_rec": rec,
+                "macro_f1": f1,
+                "per_genre": per_genre
+            })
+
+            if f1 > best_f1:
+                best_f1 = f1
+                best_model = clf
+                best_name = name
+
+    return best_model, best_name, best_f1, results
+
 
 def main():
-    with open(REPORT_PATH, 'w') as f:
-        f.write("TV Show Project - Modeling Report\n")
-        f.write(f"Target Variable: Is '{TARGET_GENRE}'?\n")
-        f.write("=================================\n")
-        
-        # 1. Raw Data
-        X_raw, y_raw, prep_raw = load_and_prep_raw()
-        train_and_evaluate(X_raw, y_raw, prep_raw, "RAW", f)
-        
-        # 2. Transformed Data
-        X_trans, y_trans, prep_trans = load_and_prep_transformed()
-        train_and_evaluate(X_trans, y_trans, prep_trans, "TRANSFORMED", f)
-        
-    print(f"\nModeling complete. Report saved to {REPORT_PATH}")
+    with open(REPORT_PATH, 'w', encoding='utf-8') as f:
+        f.write("TV Show Project - Multi-Label Modeling Report\n")
+        f.write("============================================\n\n")
+
+        datasets = [
+            ("Raw cleaned dataset", RAW_DATA_PATH),
+            ("Transformed dataset", TRANSFORMED_DATA_PATH),
+        ]
+
+        for label, path in datasets:
+
+            f.write(f"{'=' * 50}\n{label}\n{'=' * 50}\n")
+
+            X, Y, preprocessor, feature_info, genre_classes = load_and_prep_dataset(path, label)
+
+            f.write("Features used:\n")
+            f.write(f"  Numeric: {feature_info['numeric']}\n")
+            f.write(f"  Categorical: {feature_info['categorical']}\n")
+            f.write(f"  Text: {feature_info['text']}\n\n")
+
+            best_model, best_name, best_f1, results = train_and_evaluate(
+                X, Y, preprocessor, genre_classes
+            )
+
+            for res in results:
+                f.write(f"Model: {res['name']}\n")
+                f.write(f"Macro Metrics:\n")
+                f.write(f"  Accuracy: {res['macro_acc']:.4f}\n")
+                f.write(f"  Precision: {res['macro_prec']:.4f}\n")
+                f.write(f"  Recall: {res['macro_rec']:.4f}\n")
+                f.write(f"  F1: {res['macro_f1']:.4f}\n\n")
+
+                f.write("Per-Genre Metrics:\n")
+                for genre, g in res['per_genre'].items():
+                    f.write(f"  {genre}: F1={g['f1']:.4f}, Prec={g['prec']:.4f}, Rec={g['rec']:.4f}\n")
+                f.write("\n" + "-" * 30 + "\n\n")
+
+            f.write(f"Best Model: {best_name} (Macro F1={best_f1:.4f})\n")
+
+            MODELS_DIR.mkdir(parents=True, exist_ok=True)
+            slug = slugify(best_name)
+            ds_slug = slugify(label)
+            model_path = MODELS_DIR / f"{ds_slug}__multilabel__{slug}.joblib"
+
+            joblib.dump(best_model, model_path)
+            f.write(f"Saved best model to: {model_path}\n\n")
+
+    print("Training complete.")
+    print(f"Report written to {REPORT_PATH}")
 
 if __name__ == "__main__":
     main()

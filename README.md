@@ -244,4 +244,9 @@ This project combines multiple open datasets on TV shows and streaming platforms
 **Why choose these tools?:**  
 These tools ensure an efficient and reproducible workflow for ETL, data quality management, and machine learning. PostgreSQL provides structured data storage, while Python libraries like pandas and scikit-learn allow for flexible data manipulation and model experimentation. Visualization tools help us better understand platform availability, ratings, and genre distributions.
 
+## Run UI
+
+- To run the UI_final.py use:
+```python
+  streamlit run scripts/UI_final.py
 ```
