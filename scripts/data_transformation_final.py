@@ -5,7 +5,7 @@ This script loads the CLEANED dataset created by data preparation
 (`data/processed/cleaned_tv_shows.csv`) and performs:
 
 1. Data normalization / scaling for numeric features:
-   - Min–max scaling to [0, 1]
+   - Min-max scaling to [0, 1]
    - Z-score normalization
    - Decimal scaling
    (Applied differently per feature.)
@@ -14,12 +14,7 @@ This script loads the CLEANED dataset created by data preparation
    - Extract year, month, day-of-week, weekend flag, and decade
      from `premiere_date` (if available).
 
-3. Feature selection for genre prediction:
-   - Keep only columns relevant for predicting genres.
-
-4. Drop redundant raw columns:
-   - Drop: title, rating, genres
-   - Keep cleaned versions: title_normalized, rating_avg, genres_parsed
+3. Keep all cleaned columns and append engineered features; nothing is dropped.
 
 Outputs:
 - data/processed/transformed_tv_shows.csv
@@ -159,18 +154,6 @@ def main():
     report_lines.append(f"Loaded cleaned data: {INPUT_CSV}")
     report_lines.append(f"Rows: {df.shape[0]:,}, Columns: {df.shape[1]:,}\n")
 
-    # -------------------------------------------------------------
-    # DROP RAW COLUMNS (title, rating, genres)
-    # -------------------------------------------------------------
-    columns_to_drop = ["title", "rating", "genres"]
-    existing_drops = [c for c in columns_to_drop if c in df.columns]
-
-    df = df.drop(columns=existing_drops)
-    report_lines.append("Dropped raw columns (kept cleaned versions instead):")
-    for c in existing_drops:
-        report_lines.append(f"  - {c}  (kept: title_normalized, rating_avg, genres_parsed)")
-    report_lines.append("")
-
     # Convert types
     if "premiere_date" in df.columns:
         df["premiere_date"] = pd.to_datetime(df["premiere_date"], errors="coerce")
@@ -212,10 +195,10 @@ def main():
         for k, v in stats_rt.items():
             report_lines.append(f"  runtime_minutes_zscore {k}: {v}")
 
-    # rating_avg -> Min–max [0, 1]
+    # rating_avg -> Min-max [0, 1]
     if "rating_avg" in df.columns:
         df["rating_avg_minmax_01"], stats_ra = min_max_scale(df["rating_avg"])
-        report_lines.append("Applied Min–max [0,1] scaling to 'rating_avg' -> 'rating_avg_minmax_01'")
+        report_lines.append("Applied Min-max [0,1] scaling to 'rating_avg' -> 'rating_avg_minmax_01'")
         for k, v in stats_ra.items():
             report_lines.append(f"  rating_avg_minmax_01 {k}: {v}")
 
@@ -227,40 +210,14 @@ def main():
             report_lines.append(f"  release_year_decscale {k}: {v}")
 
     # -------------------------------------------------------------
-    # FEATURE SELECTION FOR GENRE PREDICTION
+    # FEATURE RETENTION
     # -------------------------------------------------------------
-    report_lines.append("\nFEATURE SELECTION FOR GENRE PREDICTION")
+    report_lines.append("\nFEATURE RETENTION")
     report_lines.append("-" * 80)
-
-    # Note: each numeric feature uses a different scaling method
-    desired_columns = [
-        "id",
-        "title_normalized",
-        "language",
-        "type",
-        "status",
-        "runtime_minutes_zscore",   # Z-score
-        "rating_avg_minmax_01",     # Min–max
-        "release_year_decscale",    # Decimal scaling
-        "premiere_year",
-        "premiere_month",
-        "premiere_dayofweek",
-        "premiere_is_weekend",
-        "premiere_decade",
-        "genres_parsed",            # LABEL
-    ]
-
-    keep = [c for c in desired_columns if c in df.columns]
-    dropped = sorted(set(df.columns) - set(keep))
-
-    df = df[keep]
-
-    report_lines.append("Columns kept (for modeling + label):")
-    for c in keep:
-        report_lines.append(f"  - {c}")
-
-    report_lines.append("")
-    report_lines.append(f"Dropped {len(dropped)} columns as redundant/irrelevant after feature selection.")
+    report_lines.append(
+        "Kept all original cleaned columns and appended engineered features "
+        "(date parts + scaled numeric columns). No columns were removed."
+    )
 
     # -------------------------------------------------------------
     # SAVE TO DB
@@ -286,3 +243,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
